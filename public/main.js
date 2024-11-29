@@ -12,9 +12,7 @@ if (!roomId) {
 
 const fetchToken = async (uid) => {
   try {
-    const response = await axios.get(
-      `http://localhost:3000/generate-token?uid=${uid}`
-    );
+    const response = await axios.get(`generate-token?uid=${uid}`);
     return response.data.token;
   } catch (error) {
     console.error("Error fetching token:", error);
@@ -52,7 +50,7 @@ const constraint = {
 };
 let init = async () => {
   token = await fetchToken(uid);
-
+  console.log(token);
   console.log("get the token", token);
 
   localStream = await navigator.mediaDevices.getUserMedia(constraint);

@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="stylesheet" type="text/css" media="screen" href="/index.css" />
+    <title>SignIn</title>
+  </head>
+  <body>
+    <main id="lobby-container">
+      <div id="form-container">
+        <div id="form__container__header">
+          <p>SignIn</p>
+        </div>
+        <div id="form__container__wrapper">
+          <!-- Loader (Initially hidden) -->
+          <div id="loader" style="display: none">Loading...</div>
+
+          <form id="signin-form">
+            <input
+              type="text"
+              name="name"
+              required
+              placeholder="Enter your name"
+            />
+            <input
+              type="email"
+              name="email"
+              required
+              placeholder="Enter your Email"
+            />
+            <input
+              type="password"
+              name="password"
+              required
+              placeholder="Enter your Password"
+            />
+            <input type="submit" value="Sign In" />
+          </form>
+        </div>
+      </div>
+    </main>
+
+    <script>
+      let form = document.getElementById("signin-form");
+      let loader = document.getElementById("loader");
+
+      form.addEventListener("submit", async (e) => {
+        e.preventDefault(); // Prevent default form submission behavior
+
+        // Show loader
+        loader.style.display = "block";
+
+        // Hide the form while loading
+        form.style.display = "none";
+
+        // Get form data
+        let name = e.target.name.value;
+        let email = e.target.email.value;
+        let password = e.target.password.value;
+
+        // Send a POST request to the backend (assuming "/auth/signup" endpoint for signing up)
+        try {
+          const response = await fetch("/auth/signup", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              name: name,
+              email: email,
+              password: password,
+            }),
+          });
+
+          const data = await response.json(); // Parse response JSON
+
+          // Hide loader when response is received
+          loader.style.display = "none";
+
+          // Show form again (if needed)
+          form.style.display = "block";
+
+          if (response.ok) {
+            alert("Sign in successful!");
+            window.location.href = "/login"; // Redirect to the login or another page
+          } else {
+            alert("Error: " + data.message); // Show error message
+          }
+        } catch (error) {
+          console.error("Error:", error);
+
+          // Hide loader if there is an error
+          loader.style.display = "none";
+
+          // Show form again (if needed)
+          form.style.display = "block";
+
+          alert("Sign in failed. Please try again.");
+        }
+      });
+    </script>
+  </body>
+</html>
