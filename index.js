@@ -1,6 +1,8 @@
 const express = require("express");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
+const serverless = require("serverless-http");
+
 const redis = require("redis");
 const { createAdapter } = require("@socket.io/redis-adapter");
 const { createClient } = require("redis");
@@ -350,6 +352,4 @@ async function getFriendsFromDb(userId) {
 }
 
 // Start the server
-server.listen(PORT, () => {
-  console.log(`Server running at http://localhost:${PORT}`);
-});
+module.exports.handler = serverless(app);

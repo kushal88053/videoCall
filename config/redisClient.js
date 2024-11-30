@@ -1,14 +1,19 @@
 const { createClient } = require("redis");
 
-const redisHost = process.env.REDIS_HOST || "127.0.0.1"; // Use environment variables if available
-const redisPort = process.env.REDIS_PORT || 6379;
+// Update the Redis host and port with your provided details
+const redisHost =
+  process.env.REDIS_HOST ||
+  "redis-11934.c305.ap-south-1-1.ec2.redns.redis-cloud.com"; // Your Redis Host
+const redisPort = process.env.REDIS_PORT || 11934; // Your Redis Port
+const redisPassword = process.env.REDIS_PASSWORD || "your-redis-password"; // Add the Redis password if needed
 
-// Create a Redis client
+// Create a Redis client with updated configuration
 const redisClient = createClient({
   socket: {
     host: redisHost,
     port: redisPort,
   },
+  password: redisPassword, // If authentication is needed
 });
 
 // Connect the Redis client
