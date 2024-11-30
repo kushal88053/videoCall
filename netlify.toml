@@ -1,0 +1,6 @@
+[build]
+  command = "npm run build" # If you need to build your app
+  publish = "public"
+
+[functions]
+  directory = "functions"
