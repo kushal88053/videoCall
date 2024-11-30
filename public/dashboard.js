@@ -4,6 +4,7 @@ const API_BASE_URL = "http://localhost:3000/";
 function getToken() {
   return localStorage.getItem("token");
 }
+const baseURL = process.env.BASE_URL || "http://localhost:3000"; // Fallback to localhost if not defined
 
 const token = getToken(); // Retrieve the token
 let friends = []; // Initialize friends as an empty array
@@ -20,7 +21,7 @@ if (!token) {
   window.location = "/login";
 } else {
   // Initialize WebSocket connection
-  socket = io("http://localhost:3000", {
+  socket = io(baseURL, {
     auth: { token }, // Pass the token for authentication
   });
 
@@ -34,7 +35,7 @@ if (!token) {
 // Function to fetch user data
 async function fetchBasicData() {
   try {
-    const response = await fetch("http://localhost:3000/api/", {
+    const response = await fetch(`/api/`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
