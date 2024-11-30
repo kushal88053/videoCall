@@ -6,7 +6,8 @@ const { createAdapter } = require("@socket.io/redis-adapter");
 const { createClient } = require("redis");
 require("dotenv").config();
 const cors = require("cors");
-const db = require("./config/db").default;
+const db = require("./config/db");
+db();
 const { RtmTokenBuilder } = require("agora-token");
 const verifyToken = require("./middlewares/verifyToken"); // Import the middleware
 const verifySocket = require("./middlewares/verifySocket"); // Import the middleware
