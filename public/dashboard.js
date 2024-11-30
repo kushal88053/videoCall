@@ -5,7 +5,7 @@ function getToken() {
   return localStorage.getItem("token");
 }
 const baseURL =
-  "https://video-call-m6gz51vrk-kushal-patels-projects-b24cffe0.vercel.app";
+  "video-call-23bq51vv2-kushal-patels-projects-b24cffe0.vercel.app";
 
 const token = getToken(); // Retrieve the token
 let friends = []; // Initialize friends as an empty array
