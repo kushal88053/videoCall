@@ -20,7 +20,14 @@ const User = require("./model/users.model");
 // Middleware setup
 app.use(cookieParser());
 app.use(express.json());
-app.use(cors());
+const corsOptions = {
+  origin: process.env.BASE_URL || "http://localhost:3000", // Use the environment variable for frontend URL
+  methods: ["GET", "POST"],
+  allowedHeaders: ["Content-Type"],
+  credentials: true,
+};
+app.use(cors(corsOptions));
+
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname + "/public"));
 app.set("view engine", "ejs");
@@ -41,7 +48,14 @@ pubClient.connect();
 subClient.connect();
 
 const server = createServer(app);
-const io = new Server(server);
+const io = new Server(server, {
+  cors: {
+    origin: process.env.BASE_URL || "http://localhost:3000", // Use the environment variable for Socket.IO connection
+    methods: ["GET", "POST"],
+    allowedHeaders: ["Content-Type"],
+    credentials: true,
+  },
+});
 
 // Use Redis adapter for Socket.IO
 io.adapter(createAdapter(pubClient, subClient));
