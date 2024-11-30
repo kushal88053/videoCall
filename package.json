@@ -1,5 +1,5 @@
 {
-  "name": "agora_web_quickstart",
+  "name": "videoCall",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -10,8 +10,6 @@
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",
-    "agora-rtc-sdk-ng": "latest",
-    "agora-rtm-sdk": "^2.2.0",
     "agora-token": "^2.0.3",
     "axios": "^1.7.7",
     "bcryptjs": "^2.4.3",
