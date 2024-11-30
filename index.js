@@ -1,14 +1,12 @@
 const express = require("express");
 const { createServer } = require("http");
 const { Server } = require("socket.io");
-const serverless = require("serverless-http");
-
 const redis = require("redis");
 const { createAdapter } = require("@socket.io/redis-adapter");
 const { createClient } = require("redis");
 require("dotenv").config();
 const cors = require("cors");
-const db = require("./config/db");
+const db = require("./config/db").default;
 const { RtmTokenBuilder } = require("agora-token");
 const verifyToken = require("./middlewares/verifyToken"); // Import the middleware
 const verifySocket = require("./middlewares/verifySocket"); // Import the middleware
@@ -352,4 +350,6 @@ async function getFriendsFromDb(userId) {
 }
 
 // Start the server
-module.exports.handler = serverless(app);
+server.listen(PORT, () => {
+  console.log(`Server running at http://localhost:${PORT}`);
+});
