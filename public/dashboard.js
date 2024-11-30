@@ -4,8 +4,7 @@ const API_BASE_URL = "http://localhost:3000/";
 function getToken() {
   return localStorage.getItem("token");
 }
-const baseURL =
-  "video-call-23bq51vv2-kushal-patels-projects-b24cffe0.vercel.app";
+const baseURL = "https://video-call-mocha.vercel.app";
 
 const token = getToken(); // Retrieve the token
 let friends = []; // Initialize friends as an empty array
