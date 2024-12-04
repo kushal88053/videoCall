@@ -19,6 +19,8 @@ const notificationSchema = new mongoose.Schema(
   { timestamps: true }
 ); // timestamps: true adds createdAt and updatedAt fields
 
-// Create and export the Notification model
+notificationSchema.index({ userId: 1, createdAt: -1 });
+
+// Create and export the Notification model 
 const Notification = mongoose.model("Notification", notificationSchema);
 module.exports = Notification;
