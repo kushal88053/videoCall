@@ -93,6 +93,8 @@ exports.login = async (req, res) => {
       maxAge: 3600000, // 1 hour in milliseconds
     });
 
+    console.log(process.env.NODE_ENV === "production");
+
     // Option 2: Send token as a Bearer token in response (or you can choose to do both)
     res.status(200).json({
       message: "Login successful",
