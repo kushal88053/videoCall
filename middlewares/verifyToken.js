@@ -6,11 +6,13 @@ const verifyToken = (req, res, next) => {
   // Check for token in cookies (for HTTP requests)
   if (req.cookies && req.cookies.token) {
     token = req.cookies.token;
+    console.log("cookie token", token);
   }
 
   // Check for token in headers (for WebSocket or API requests)
   if (req.headers && req.headers.authorization) {
     token = req.headers.authorization.split(" ")[1]; // Expecting "Bearer <token>"
+    console.log("header auth", token);
   }
 
   // Handle missing token
