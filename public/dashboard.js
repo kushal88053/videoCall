@@ -18,7 +18,7 @@ let socket = null;
 // Check if the token is available, redirect if not
 if (!token) {
   alert("You must be logged in to view this page.");
-  // window.location = "/login";
+  window.location = "/login";
 } else {
   // Initialize WebSocket connection
   socket = io(baseURL, {
@@ -28,7 +28,7 @@ if (!token) {
   // Check if socket connection failed
   if (!socket) {
     alert("Connection error. Please log in again.");
-    // window.location = "/login";
+    window.location = "/login";
   }
 }
 
