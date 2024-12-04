@@ -85,6 +85,7 @@ exports.login = async (req, res) => {
     });
 
     console.log(token);
+    console.log(process.env);
     // Option 1: Send token as a cookie (HttpOnly, Secure flags recommended for production)
     res.cookie("token", token, {
       httpOnly: true, // Prevents client-side access to the cookie
