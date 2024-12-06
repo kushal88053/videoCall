@@ -44,7 +44,7 @@ if (!token) {
 // Function to fetch user data
 async function fetchBasicData() {
   try {
-    const response = await fetch("http://localhost:3000/api/", {
+    const response = await fetch(`${API_BASE_URL}/api/`, {
       method: "GET",
       headers: {
         "Content-Type": "application/json",
