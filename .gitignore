@@ -15,6 +15,7 @@ logs
 
 # Optional npm cache directory
 .npm
+.ssh
 
 # Optional eslint cache
 .eslintcache

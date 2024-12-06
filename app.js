@@ -27,7 +27,10 @@ const corsOptions = {
   credentials: true,
 };
 app.use(cors(corsOptions));
-
+app.get("/health", (req, res) => {
+  // You can add logic here to check if your app or services are healthy
+  res.status(200).send("OK");
+});
 app.use(express.urlencoded({ extended: true }));
 app.use(express.static(__dirname + "/public"));
 app.set("view engine", "ejs");
