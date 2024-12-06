@@ -1,5 +1,15 @@
 console.log("dashboard");
-const API_BASE_URL = "http://localhost:3000/";
+let API_BASE_URL;
+
+if (window.location.hostname === "localhost") {
+  // Development environment
+  API_BASE_URL = "http://localhost:3000";
+} else {
+  // Production environment (use your Elastic Beanstalk domain)
+  API_BASE_URL = window.location.origin; // This will use the full URL (e.g., https://yourdomain.com)
+}
+
+console.log(API_BASE_URL); // Output: http://localhost:3000 or your live domain
 // Function to get a specific token from local storage
 function getToken() {
   return localStorage.getItem("token");
@@ -20,7 +30,7 @@ if (!token) {
   window.location = "/login";
 } else {
   // Initialize WebSocket connection
-  socket = io("http://localhost:3000", {
+  socket = io(API_BASE_URL, {
     auth: { token }, // Pass the token for authentication
   });
 
@@ -480,7 +490,7 @@ async function sendFriendRequest(friend_id) {
 async function cancelFriendRequest(friend_id) {
   console.log(`${API_BASE_URL}`);
   try {
-    const response = await fetch(`${API_BASE_URL}api/cancelFriendRequest`, {
+    const response = await fetch(`${API_BASE_URL}/api/cancelFriendRequest`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -506,7 +516,7 @@ async function cancelFriendRequest(friend_id) {
 async function acceptFriendRequest(friend_id) {
   console.log("acceptFriendRequest", friend_id);
   try {
-    const response = await fetch(`${API_BASE_URL}api/acceptFriendRequest`, {
+    const response = await fetch(`${API_BASE_URL}/api/acceptFriendRequest`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -559,7 +569,7 @@ async function acceptFriendRequest(friend_id) {
 async function removeFriend(friend_id) {
   console.log("in removeFriend api ");
   try {
-    const response = await fetch(`${API_BASE_URL}api/removeFriend`, {
+    const response = await fetch(`${API_BASE_URL}/api/removeFriend`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -585,7 +595,7 @@ async function removeFriend(friend_id) {
 // Cancel Incoming Friend Request
 async function rejectFriendRequest(friend_id) {
   try {
-    const response = await fetch(`${API_BASE_URL}api/rejectFriendRequest`, {
+    const response = await fetch(`${API_BASE_URL}/api/rejectFriendRequest`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -620,7 +630,7 @@ async function rejectFriendRequest(friend_id) {
 
 async function blockFriend(friend_id) {
   try {
-    const response = await fetch(`${API_BASE_URL}api/blockFriend`, {
+    const response = await fetch(`${API_BASE_URL}/api/blockFriend`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -666,7 +676,7 @@ async function toggleBlockStatus(friend_id, isBlocked) {
     const endpoint = isBlocked ? "api/unblockingFriend" : "api/blockingFriend";
     const action = isBlocked ? "unblock" : "block";
 
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+    const response = await fetch(`${API_BASE_URL}/${endpoint}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -674,7 +684,7 @@ async function toggleBlockStatus(friend_id, isBlocked) {
       },
       body: JSON.stringify({ friend_id }),
     });
-    console.log("respose", `${API_BASE_URL}${endpoint}`, response);
+    console.log("respose", `${API_BASE_URL}/${endpoint}`, response);
     if (!response.ok) {
       throw new Error(`Failed to ${action} the user.`);
     }
