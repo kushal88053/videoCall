@@ -1,8 +1,8 @@
 const User = require("../model/users.model"); // Assuming you have a User model
-const redisClient = require("../config/redisClient"); // Import the Redis client
 const mongoose = require("mongoose");
 const { use } = require("../routers/auth");
 
+const { redisClient, notifyQueue } = require("../config/redisClient");
 // Get User Dashboard Information
 exports.getUserDashboard = async (req, res) => {
   try {
@@ -22,7 +22,7 @@ exports.getUserDashboard = async (req, res) => {
     let status = [];
     const friendsWithStatus = await Promise.all(
       user.friends.map(async (friend) => {
-        const activeStatus = await redisClient.hGet(
+        const activeStatus = await redisClient.hget(
           `user:${friend._id}`,
           "active"
         );
@@ -358,63 +358,84 @@ exports.sendFriendRequest = async (req, res) => {
   const { friend_id } = req.body;
   const user_id = req.user.userId; // Assuming user_id is attached to req.user from authentication middleware
 
-  console.log(friend_id, user_id);
+  console.log(`Friend ID: ${friend_id}, User ID: ${user_id}`);
 
   // Start a session for the transaction
   const session = await mongoose.startSession();
 
   try {
-    validateObjectId(friend_id); // Ensure friend_id is valid
+    // Validate Object IDs
+    validateObjectId(friend_id);
     validateObjectId(user_id);
 
     // Check if the request already exists
     const [user, friend] = await Promise.all([
-      User.findById(user_id, "friendRequestsSent").exec(),
+      User.findById(user_id, "name email imageUrl   friendRequestsSent").exec(),
       User.findById(friend_id, "friendRequestsReceived").exec(),
     ]);
+
+    if (!friend) {
+      throw new Error("Friend not found.");
+    }
 
     if (
       user.friendRequestsSent.includes(friend_id) ||
       friend.friendRequestsReceived.includes(user_id)
     ) {
-      session.endSession();
       return res.status(400).json({ error: "Friend request already sent." });
     }
 
-    session.startTransaction(); // Start transaction
+    // Start transaction
+    session.startTransaction();
 
     // Add friend_id to user's friendRequestsSent
     await User.findByIdAndUpdate(
       user_id,
       { $addToSet: { friendRequestsSent: friend_id } },
-      { new: true, session } // Include session in the operation
+      { session }
     );
 
     // Add user_id to friend's friendRequestsReceived
     await User.findByIdAndUpdate(
       friend_id,
       { $addToSet: { friendRequestsReceived: user_id } },
-      { new: true, session } // Include session in the operation
+      { session }
     );
 
     // Commit the transaction if both operations succeed
     await session.commitTransaction();
+
+    // End the session after commit
     session.endSession();
 
-    res.status(200).json({ message: "Friend request sent successfully" });
+    // Add a notification job to the queue
+    await notifyQueue.add("notification", {
+      user_id: friend_id,
+      topic: "INCOMING_REQUEST",
+      notification: {
+        subject: "Friend Request",
+        request_data: {
+          id: user._id,
+          imageUrl: user.imageUrl,
+          email: user.email,
+        },
+        message: "You have received a new friend request.",
+      },
+    });
+
+    res.status(200).json({ message: "Friend request sent successfully." });
   } catch (error) {
-    // Roll back any changes if there is an error
+    // Roll back the transaction if there is an error
     await session.abortTransaction();
     session.endSession();
 
     console.error("Error sending friend request:", error.message);
     res
       .status(400)
-      .json({ error: "Failed to send friend request. Changes rolled back." });
+      .json({ error: `Failed to send friend request: ${error.message}` });
   }
 };
 
-// Cancel Friend Request
 exports.cancelFriendRequest = async (req, res) => {
   const { friend_id } = req.body;
   const user_id = req.user.userId; // Assuming user_id is attached to req.user from authentication middleware
@@ -423,7 +444,10 @@ exports.cancelFriendRequest = async (req, res) => {
     // Validate friend_id
     validateObjectId(friend_id); // Ensure friend_id is valid
     validateObjectId(user_id);
-    const user = await User.findById(user_id, "friendRequestsSent").exec();
+    const user = await User.findById(
+      user_id,
+      "name email imageUrl friendRequestsSent"
+    ).exec();
     const friend = await User.findById(
       friend_id,
       "friendRequestsReceived"
@@ -463,6 +487,20 @@ exports.cancelFriendRequest = async (req, res) => {
       await session.commitTransaction();
       session.endSession();
 
+      await notifyQueue.add("notification", {
+        user_id: friend_id,
+        topic: "CANCEL_REQUEST",
+        notification: {
+          subject: "Cancel  Request",
+          request_data: {
+            id: user._id,
+            imageUrl: user.imageUrl,
+            email: user.email,
+          },
+          message: "Request is Cancel",
+        },
+      });
+
       res
         .status(200)
         .json({ message: "Friend request cancelled successfully" });
@@ -485,36 +523,28 @@ exports.acceptFriendRequest = async (req, res) => {
   console.log("acceptFriendRequest");
   const friend_id = new mongoose.Types.ObjectId(String(req.body.friend_id));
 
-  const user_id = new mongoose.Types.ObjectId(String(req.user.userId)); // Ensure userId is a string
-
-  console.log(friend_id);
-
-  console.log(user_id);
+  const user_id = new mongoose.Types.ObjectId(String(req.user.userId));
 
   try {
-    // Validate friend_id and user_id
     validateObjectId(friend_id);
 
-    // Pre-check if the users are already friends or friend request exists
     const user = await User.findById(
       user_id,
-      "friendRequestsReceived friendRequestsSent friends"
+      "name email imageUrl friendRequestsReceived friendRequestsSent friends"
     ).exec();
     const friend = await User.findById(
       friend_id,
-      "friendRequestsSent friendRequestsReceived friends"
+      " friendRequestsSent friendRequestsReceived friends"
     ).exec();
 
     if (!user || !friend) {
       return res.status(404).json({ error: "User or friend not found" });
     }
 
-    // Check if they are already friends
     if (user.friends.includes(friend_id) || friend.friends.includes(user_id)) {
       return res.status(400).json({ error: "Users are already friends" });
     }
 
-    // Check if the friend request exists
     const userSentRequest = user.friendRequestsSent.includes(friend_id);
     const userReceivedRequest = user.friendRequestsReceived.includes(friend_id);
     const friendSentRequest = friend.friendRequestsSent.includes(user_id);
@@ -525,18 +555,16 @@ exports.acceptFriendRequest = async (req, res) => {
       return res.status(400).json({ error: "Friend request does not exist" });
     }
 
-    // Start a session for the transaction
     const session = await mongoose.startSession();
     session.startTransaction();
 
     try {
-      // Update user's data: Add to friends, remove from requests
       await User.findByIdAndUpdate(
         user_id,
         {
           $pull: {
             friendRequestsReceived: friend_id,
-            friendRequestsSent: friend_id, // Remove any existing mutual request
+            friendRequestsSent: friend_id,
           },
           $addToSet: { friends: friend_id }, // Add to friends list
         },
@@ -559,10 +587,24 @@ exports.acceptFriendRequest = async (req, res) => {
       // Commit the transaction if all updates succeed
       await session.commitTransaction();
       session.endSession();
-      const activeStatus = await redisClient.hGet(
+      const activeStatus = await redisClient.hget(
         `user:${friend_id}`,
         "active"
       );
+
+      await notifyQueue.add("notification", {
+        user_id: friend_id,
+        topic: "ACCEPT_REQUEST",
+        notification: {
+          subject: "Accepted Request",
+          request_data: {
+            id: user._id,
+            imageUrl: user.imageUrl,
+            email: user.email,
+          },
+          message: "Friend Request Accepted..",
+        },
+      });
       res.status(200).json({
         message: "Friend request accepted successfully",
         active: activeStatus === "true",
@@ -581,34 +623,6 @@ exports.acceptFriendRequest = async (req, res) => {
   }
 };
 
-// Cancel Incoming Friend Request
-// exports.cancelIncomingRequest = async (req, res) => {
-//   const { friend_id } = req.body;
-//   const user_id = req.user._id; // Assuming user_id is attached to req.user from authentication middleware
-
-//   try {
-//     validateObjectId(friend_id);
-
-//     // Remove friend_id from user's friendRequestsReceived and user_id from friend's friendRequestsSent
-//     await User.findByIdAndUpdate(
-//       user_id,
-//       { $pull: { friendRequestsReceived: friend_id } },
-//       { new: true }
-//     );
-//     await User.findByIdAndUpdate(
-//       friend_id,
-//       { $pull: { friendRequestsSent: user_id } },
-//       { new: true }
-//     );
-
-//     res
-//       .status(200)
-//       .json({ message: "Incoming friend request cancelled successfully" });
-//   } catch (error) {
-//     res.status(400).json({ error: error.message });
-//   }
-// };
-
 exports.removeFriend = async (req, res) => {
   console.log("Backend removeFriend");
   const { friend_id } = req.body; // Friend's ID from request body
@@ -619,7 +633,11 @@ exports.removeFriend = async (req, res) => {
     validateObjectId(user_id);
     validateObjectId(friend_id);
 
-    const user = await User.findById(user_id, "friends blockedUsers").exec();
+    const user = await User.findById(
+      user_id,
+      "name email imageUrl friends blockedUsers"
+    ).exec();
+
     if (!user) {
       return res.status(404).json({ error: "User not found" });
     }
@@ -655,6 +673,20 @@ exports.removeFriend = async (req, res) => {
       // Commit the transaction
       await session.commitTransaction();
       session.endSession();
+
+      await notifyQueue.add("notification", {
+        topic: "REMOVE_FRIEND",
+        user_id: friend_id,
+        notification: {
+          subject: "Remove Friend",
+          request_data: {
+            id: user._id,
+            imageUrl: user.imageUrl,
+            email: user.email,
+          },
+          message: "Remove form the Friend list...",
+        },
+      });
 
       res.status(200).json({ message: "Friend removed successfully" });
     } catch (transactionError) {
@@ -700,6 +732,21 @@ exports.rejectFriendRequest = async (req, res) => {
       });
     }
 
+    const user = await User.findById(user_id, "name email imageUrl ").exec();
+
+    await notifyQueue.add("notification", {
+      topic: "REJECT_REQUEST",
+      user_id: friend_id,
+      notification: {
+        subject: "reject Friend Request",
+        request_data: {
+          id: user._id,
+          imageUrl: user.imageUrl,
+          email: user.email,
+        },
+        message: "Friend Request is Rejected ...",
+      },
+    });
     res.status(200).json({ message: "Friend request rejected successfully" });
   } catch (error) {
     console.error("Error rejecting friend request:", error);
@@ -830,5 +877,137 @@ exports.unblockingFriend = async (req, res) => {
   } catch (error) {
     console.error("Error unblocking friend:", error);
     res.status(400).json({ success: false, error: error.message });
+  }
+};
+
+exports.updateUserImage = async (req, res) => {
+  try {
+    // Ensure that the user is authenticated (assuming you use a middleware for authentication)
+    const userId = req.user.userIdid; // Assuming `req.user` is populated by your auth middleware
+
+    if (!req.file || !req.file.s3Url) {
+      return res.status(400).json({ message: "Image upload failed." });
+    }
+
+    // Get the image URL from the S3 upload result
+    const imageUrl = req.file.s3Url;
+
+    // Find the user and update their imageUrl
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    user.imageUrl = imageUrl; // Save the image URL to the user document
+    await user.save(); // Save the updated user document
+
+    // Respond with the updated image URL
+    res.status(200).json({
+      message: "Profile image updated successfully.",
+      imageUrl: imageUrl,
+    });
+  } catch (error) {
+    console.error("Error updating user image:", error);
+    res.status(500).json({ message: "Server error." });
+  }
+};
+
+exports.updateUserEmail = async (req, res) => {
+  try {
+    const { newEmail, verificationToken } = req.body;
+    const userId = req.user.userId;
+    // Check if all required fields are provided
+    if (!userId || !newEmail || !verificationToken) {
+      return res.status(400).json({ message: "Missing required fields." });
+    }
+
+    // Check if the new email is already in use
+    const existingUser = await User.findOne({ email: newEmail });
+    if (existingUser) {
+      return res.status(400).json({ message: "Email is already in use." });
+    }
+
+    // Find the user by their ID
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Check if the provided verification token matches and is not expired
+    if (
+      !crypto.timingSafeEqual(
+        Buffer.from(user.verificationToken || ""),
+        Buffer.from(verificationToken || "")
+      )
+    ) {
+      return res.status(401).json({ message: "Invalid verification token." });
+    }
+
+    if (user.tokenExpiry < Date.now()) {
+      return res
+        .status(400)
+        .json({ message: "Verification token has expired." });
+    }
+
+    // Update the user's email
+    user.email = newEmail;
+    user.isVerified = true; // Mark the user as unverified again
+    user.verificationToken = undefined; // Clear the verification token
+    user.tokenExpiry = undefined; // Clear the token expiry
+    await user.save();
+
+    return res.status(200).json({
+      message: "Email updated successfully.",
+    });
+  } catch (error) {
+    console.error("Error updating email:", error);
+    res.status(500).json({ message: "Server error." });
+  }
+};
+
+exports.updateUserdata = async (req, res) => {
+  try {
+    const { name, password } = req.body;
+
+    const userId = req.user.userId;
+
+    // Validate input existence
+    if (!userId || (!name && !password)) {
+      return res.status(400).json({
+        message:
+          "Missing required fields. Provide at least a name or password.",
+      });
+    }
+
+    // Find the user in the database
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Update the name if provided
+    if (name != user.name) {
+      user.name = name;
+    }
+
+    // Update the password if provided
+    if (password) {
+      user.password = password;
+    }
+
+    // Save the updated user
+    await user.save();
+
+    res.status(200).json({
+      message: "User data updated successfully!",
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+      },
+    });
+  } catch (error) {
+    console.error("Error updating user data:", error);
+    res.status(500).json({ message: "Server error. Please try again later." });
   }
 };

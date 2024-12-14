@@ -5,6 +5,29 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" type="text/css" media="screen" href="/index.css" />
     <title>Login</title>
+    <style>
+      #additional-links {
+        text-align: center;
+        margin-top: 20px;
+      }
+
+      #additional-links a {
+        color: #007bff;
+        text-decoration: none;
+        font-size: 14px;
+        margin: 5px 0;
+        display: block;
+        transition: color 0.3s;
+      }
+
+      #additional-links a:hover {
+        color: #0056b3;
+      }
+
+      #additional-links p {
+        margin: 10px 0;
+      }
+    </style>
   </head>
   <body>
     <main id="lobby-container">
@@ -28,6 +51,22 @@
             />
             <input type="submit" value="Login" />
           </form>
+          <div id="additional-links">
+            <p>
+              <a href="/forgot-password" id="forgot-password-link"
+                >Forgot Password?</a
+              >
+            </p>
+            <p><a href="/signup">Sign Up</a></p>
+            <p>
+              <a
+                href="/resend"
+                style="display: none"
+                id="resend-verification-link"
+                >Resend Verification Email</a
+              >
+            </p>
+          </div>
         </div>
       </div>
     </main>
@@ -68,7 +107,12 @@
             alert("Login successful!");
             window.location.href = "/dashboard"; // Redirect to the dashboard or another page
           } else {
-            alert("Error: " + data.message); // Show error message
+            alert("Error: " + data.message); // Show error
+            if (response.status === 401) {
+              document.getElementById(
+                "resend-verification-link"
+              ).style.display = "block"; // Show the resend link
+            }
           }
         } catch (error) {
           console.error("Error:", error);

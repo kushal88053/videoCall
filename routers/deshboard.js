@@ -6,6 +6,7 @@ const {
   getIncomingFriendRequests,
   getNotifications,
 } = require("../controllers/dashboardController");
+const uploadToS3 = require("../middlewares/uploadMiddleware"); // Import the middleware
 
 const router = express.Router();
 

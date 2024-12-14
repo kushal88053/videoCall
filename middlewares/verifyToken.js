@@ -3,25 +3,22 @@ const jwt = require("jsonwebtoken");
 const verifyToken = (req, res, next) => {
   let token;
 
-  // Check for token in cookies (for HTTP requests)
+  if (req.query && req.query.token) {
+    token = req.query.token;
+  }
+
   if (req.cookies && req.cookies.token) {
     token = req.cookies.token;
-    console.log("cookie token", token);
   }
 
-  // Check for token in headers (for WebSocket or API requests)
   if (req.headers && req.headers.authorization) {
-    token = req.headers.authorization.split(" ")[1]; // Expecting "Bearer <token>"
-    console.log("header auth", token);
+    token = req.headers.authorization.split(" ")[1];
   }
 
-  // Handle missing token
   if (!token) {
     if (req.originalUrl.startsWith("/api/")) {
-      // If it's an API request, send JSON error
       return res.status(401).json({ error: "Authentication token required" });
     } else {
-      // For page requests, redirect to login
       console.log("verify login middlware token not awailable");
       return res.redirect("/login");
     }

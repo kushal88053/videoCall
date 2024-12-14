@@ -4,45 +4,33 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <link rel="stylesheet" type="text/css" media="screen" href="/index.css" />
-    <title>SignIn</title>
+    <title>Resend Verification Email</title>
   </head>
   <body>
     <main id="lobby-container">
       <div id="form-container">
         <div id="form__container__header">
-          <p>SignIn</p>
+          <p>Resend Verification Email</p>
         </div>
         <div id="form__container__wrapper">
-          <!-- Loader (Initially hidden) -->
-
-          <form id="signin-form">
-            <input
-              type="text"
-              name="name"
-              required
-              placeholder="Enter your name"
-            />
+          <!-- Form for resending email -->
+          <form id="resend-email-form">
             <input
               type="email"
               name="email"
               required
-              placeholder="Enter your Email"
+              placeholder="Enter your registered Email"
             />
-            <input
-              type="password"
-              name="password"
-              required
-              placeholder="Enter your Password"
-            />
-            <input type="submit" value="Sign In" />
+            <input type="submit" value="Resend Email" />
           </form>
+          <!-- Loader (Initially hidden) -->
           <div id="loader" style="display: none">Loading...</div>
         </div>
       </div>
     </main>
 
     <script>
-      let form = document.getElementById("signin-form");
+      let form = document.getElementById("resend-email-form");
       let loader = document.getElementById("loader");
 
       form.addEventListener("submit", async (e) => {
@@ -55,25 +43,21 @@
         form.style.display = "none";
 
         // Get form data
-        let name = e.target.name.value;
         let email = e.target.email.value;
-        let password = e.target.password.value;
 
-        // Send a POST request to the backend (assuming "/auth/signup" endpoint for signing up)
+        // Send a POST request to the backend (assuming "/auth/resend-email" endpoint for resending email)
         try {
-          const response = await fetch("/auth/signup", {
+          const response = await fetch("/auth/resend-email", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              name: name,
               email: email,
-              password: password,
             }),
           });
 
-          const data = await response.json(); // Parse response JSON
+          const data = await response.json();
 
           // Hide loader when response is received
           loader.style.display = "none";
@@ -82,26 +66,20 @@
           form.style.display = "block";
 
           if (response.ok) {
-            console.log(data);
-
-            if (data.accepted && data.accepted.length > 0) {
-              // Check if the email was sent successfully
+            if (data.emailInfo && data.emailInfo.accepted.length > 0) {
+              // Email successfully sent
               alert(
-                "Sign-up successful! A verification email has been sent to your address. Please verify your email and log in."
+                "Verification email sent successfully! Please check your inbox and verify your email."
               );
-
-              // Optionally, redirect to the login page
-              // window.location.href = "/login";
             } else {
-              // If the email was not sent
+              // Email failed to send
               alert(
-                "Sign-up was successful, but we could not send the verification email. Please contact support."
+                "We could not send the verification email. Please check your email address or try again later."
               );
             }
-
-            window.location.href = "/login"; // Redirect to the login or another page
           } else {
-            alert("Error: " + data.message); // Show error message
+            // Error from the server
+            alert("Error: " + data.message);
           }
         } catch (error) {
           console.error("Error:", error);
@@ -112,7 +90,7 @@
           // Show form again (if needed)
           form.style.display = "block";
 
-          alert("Sign in failed. Please try again.");
+          alert("Failed to resend the verification email. Please try again.");
         }
       });
     </script>

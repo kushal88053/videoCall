@@ -20,7 +20,12 @@ let friends = []; // Initialize friends as an empty array
 let friendRequests = []; // Initialize friends as an empty array
 let blocked__users = []; // Initialize friends as an empty array
 let sentFriendRequests = []; // Initialize friends as an empty array
-const incommingAudio = new Audio("/audio/incoming.mp3");
+let incommingAudio = null;
+let callingAudio = null;
+let recieverId = null;
+let isRinging = null;
+let isCalling = null;
+let connection = null;
 
 const friendsStatus = {}; // Maintain a local map of friends and their statuses
 let socket = null;
@@ -205,7 +210,7 @@ function updateFriendStatus(friendId, status) {
   if (statusElement) {
     statusElement.className = `friend-status ${status}`;
     friendsStatus[friendId] = status;
-    updateUserStatus(friend_id, false);
+    updateUserStatus(friendId, false);
   }
 }
 
@@ -226,7 +231,6 @@ socket.on("reconnect", (attemptNumber) => {
   // Optionally, re-fetch the latest friend statuses if needed
 });
 
-// Listen for online/offline events from the server
 socket.on("user_online", (data) => {
   console.log(`User ${data.userId} is online`);
   updateFriendStatus(data.userId, "online");
@@ -237,17 +241,17 @@ socket.on("user_offline", (data) => {
   updateFriendStatus(data.userId, "offline");
 });
 
+socket.on("friend_status", (data) => {
+  console.log(`friend_status `, data);
+  updateFriendStatus(data.userId, data.isActive ? "online" : "offline");
+});
+
 socket.on("connect_error", (error) => {
   console.error("Connection failed:", error.message);
   if (error.message === "Authentication error: Invalid or expired token") {
     alert("Your session has expired. Please log in again.");
     window.location.href = "/login"; // Redirect to login
   }
-});
-
-socket.on("incoming_call", ({ fromUserId }) => {
-  console.log(`Incoming call from user: ${fromUserId}`);
-  showIncomingCallUI(fromUserId);
 });
 
 socket.on("call_answer", ({ fromUserId, payload }) => {
@@ -261,6 +265,7 @@ socket.on("user_busy", ({ message }) => {
 
 socket.on("call_rejected", ({ fromUserId }) => {
   console.log(`Call rejected by user: ${fromUserId}`);
+  stopMediaTracks();
   hideCallingUI();
   showbasicUI();
   showEndCallUI("Call Rejected by Receiver", fromUserId);
@@ -270,18 +275,6 @@ socket.on("call_ended", ({ fromUserId }) => {
   console.log(`Call ended by user: ${fromUserId}`);
   endCallUI();
 });
-
-// const startCall = async (toUserId) => {
-//   socket.emit("start_call", { toUserId });
-//   const offer = await peerConnection.createOffer();
-//   await peerConnection.setLocalDescription(offer);
-
-//   socket.emit("signaling", {
-//     type: "offer",
-//     toUserId,
-//     payload: offer,
-//   });
-// };
 
 const acceptCall = async (fromUserId, offer) => {
   const answer = await peerConnection.createAnswer();
@@ -299,8 +292,10 @@ const endCall = async (toUserId) => {
   peerConnection.close();
 };
 
-const rejectCall = (toUserId) => {
-  socket.emit("reject_call", { toUserId });
+const rejectCall = (user_id) => {
+  clearSpecificSessionData();
+  isCalling = null;
+  socket.emit("call_rejected", { toUserId: user_id });
 };
 // Fetch initial data
 fetchBasicData();
@@ -461,17 +456,14 @@ function createActionButton(friend) {
 // Function to send a friend request
 async function sendFriendRequest(friend_id) {
   try {
-    const response = await fetch(
-      `http://localhost:3000/api/sendFriendRequest`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ friend_id }),
-      }
-    );
+    const response = await fetch(`${API_BASE_URL}/api/sendFriendRequest`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+      body: JSON.stringify({ friend_id }),
+    });
 
     if (!response.ok) {
       throw new Error("Failed to send the request. Please try again.");
@@ -834,37 +826,6 @@ document.addEventListener("click", (event) => {
     }
   }
 });
-function OnclickCalling(friendId) {
-  console.log(`Calling friend with ID: ${friendId}`);
-
-  // Select all elements with the class "call-button"
-  hidebasicUI();
-
-  const friend = friends.find((friend) => friend._id == friendId);
-  console.log("findind frind", friend);
-
-  document.getElementById("basic-ui").classList.add("content");
-  document.getElementById("calling-ui").classList.remove("content");
-
-  //   document.getElementById("incoming-status").classList.add("content");
-
-  Calling(friend);
-
-  document
-    .getElementById("cancel-call-button")
-    .addEventListener("click", () => {
-      // Notify server of call cancellation
-      socket.emit("cancel_call", { toUserId: friendId });
-
-      // Hide calling UI
-      stopMediaTracks();
-      //   toggleMic();
-      hideCallingUI();
-      showbasicUI();
-      // Show notification of call cancellation
-      //   alert("Call cancelled.");
-    });
-}
 
 // function cancelCall() {
 //   //   alert("Call cancelled!");
@@ -997,6 +958,12 @@ socket.on("answer_received", async ({ answer, fromUserId }) => {
     await peerConnection.setRemoteDescription(answer);
     console.log("Answer set successfully.");
 
+    // After setting the answer, attach the ICE candidate handler
+    peerConnection.onicecandidate = (event) => {
+      handleIceCandidate(event, fromUserId); // Pass the fromUserId (peerId)
+    };
+    isRinging = null;
+
     socket.emit("answer_set_ack", {
       toUserId: fromUserId, // Caller ID
       message: "Answer has been set successfully",
@@ -1006,7 +973,15 @@ socket.on("answer_received", async ({ answer, fromUserId }) => {
 });
 
 socket.on("answer_acknowledged", ({ message }) => {
+  isCalling = null;
   console.log("answer_acknowledged", message); // Display the acknowledgment message
+  if (peerConnection) {
+    // Set the remote description using the received answer
+    // After setting the answer, attach the ICE candidate handler
+    peerConnection.onicecandidate = (event) => {
+      handleIceCandidate(event, fromUserId); // Pass the fromUserId (peerId)
+    };
+  }
 
   const acceptCallBtn = document.getElementById("accept-call-btn");
   acceptCallBtn.disabled = false;
@@ -1029,12 +1004,19 @@ const hidebasicUI = () => {
 const showbasicUI = () => {
   const callButtons = document.querySelectorAll(".call-button");
 
+  const rejectCallBtn = document.getElementById("reject-call-btn");
+
+  rejectCallBtn.disabled = false;
   // Loop through each button and add the "content" class
   callButtons.forEach((button) => {
     button.classList.remove("content");
   });
   document.getElementById("calling-ui").style.display = "none";
   document.getElementById("basic-ui").style.display = "block";
+
+  //
+
+  stopMediaTracks();
 };
 
 socket.on("ice_candidate", async ({ candidate }) => {
@@ -1045,6 +1027,8 @@ socket.on("ice_candidate", async ({ candidate }) => {
 });
 
 socket.on("call_busy", ({ message }) => {
+  hideCallingUI();
+  showbasicUI();
   alert(message);
 });
 
@@ -1061,67 +1045,223 @@ socket.on("member_left", ({ uid }) => {
 socket.on("offer_acknowledged", ({ fromUserId }) => {
   console.log(`Receiver ${fromUserId} acknowledged the offer.`);
   document.getElementById("caller-status").textContent = "Ringing...";
+  isRinging = fromUserId;
 });
 
 // Functions for Call Management
 const createPeerConnection = async (toUserId) => {
-  peerConnection = new RTCPeerConnection(servers);
-
-  // Add local tracks
-  if (!localStream) {
+  try {
+    // Request access to media devices (camera & microphone)
     localStream = await navigator.mediaDevices.getUserMedia(constraint);
-    document.getElementById("user-1").srcObject = localStream;
-  }
 
-  localStream.getTracks().forEach((track) => {
-    peerConnection.addTrack(track, localStream);
-  });
+    // If permission granted, proceed with peer connection
+    if (localStream) {
+      document.getElementById("user-1").srcObject = localStream;
 
-  // Handle remote tracks
-  peerConnection.ontrack = (event) => {
-    const remoteStream = new MediaStream();
-    remoteStream.addTrack(event.track);
-    document.getElementById("user-2").srcObject = remoteStream;
-  };
+      // Create a new RTCPeerConnection instance
+      peerConnection = new RTCPeerConnection(servers);
 
-  // Handle ICE candidates
-  peerConnection.onicecandidate = (event) => {
-    if (event.candidate) {
-      socket.emit("ice_candidate", {
-        toUserId,
-        candidate: event.candidate,
+      // Add local media tracks to the peer connection
+      localStream.getTracks().forEach((track) => {
+        peerConnection.addTrack(track, localStream);
       });
+
+      peerConnection.ontrack = handleRemoteStream;
+      //   peerConnection.ontrack = (event) => {
+      //     const remoteStream = new MediaStream();
+      //     remoteStream.addTrack(event.track);
+      //     document.getElementById("user-2").srcObject = remoteStream;
+      //   };
+
+      //   peerConnection.onicecandidate = (event) => {
+      //     handleIceCandidate(event, toUserId); // Pass the event and toUserId
+      //   };
+      // Handle ICE candidates
+      //   peerConnection.onicecandidate = (event) => {
+      //     if (event.candidate) {
+      //       socket.emit("ice_candidate", {
+      //         toUserId,
+      //         candidate: event.candidate,
+      //       });
+      //     }
+      //   };
+
+      // Return true if everything is successful
+      return true;
     }
-  };
+  } catch (error) {
+    // If permission is denied or error occurs
+    if (error.name === "NotAllowedError") {
+      alert("Permission to access camera/microphone was denied ");
+      //   window.history.back(); // Go back to the previous page
+    } else {
+      alert(
+        "An error occurred while trying to access media devices. Please check your settings."
+      );
+    }
+    return false;
+  }
 };
 
 const createOffer = async (toUserId) => {
   console.log("createOffer", toUserId);
-  await createPeerConnection(toUserId);
 
-  const offer = await peerConnection.createOffer();
-  await peerConnection.setLocalDescription(offer);
+  // Call createPeerConnection and wait for the result
+  const result = await createPeerConnection(toUserId);
 
-  socket.emit("send_offer", { toUserId, offer });
+  // If result is true (media access granted and peer connection established)
+  if (result) {
+    try {
+      // Create the offer if permission is granted
+      const offer = await peerConnection.createOffer();
+
+      // Set the local description with the created offer
+      await peerConnection.setLocalDescription(offer);
+
+      // Emit the offer through the socket to the other user
+      socket.emit("send_offer", { toUserId, offer });
+
+      setTimeout(() => {
+        console.log("This message will show after 1 second");
+      }, 1000);
+      console.log("Offer sent to:", toUserId);
+      return true;
+    } catch (error) {
+      console.error("Error creating or sending offer:", error);
+      alert("An error occurred while creating the offer. Please try again.");
+
+      return false;
+    }
+  } else {
+    console.log("Failed to create peer connection. Cannot create offer.");
+    // alert(
+    //   "Failed to access media devices. Please allow camera and microphone access."
+    // );
+
+    return false;
+  }
 };
 
 const createAnswer = async (fromUserId, offer) => {
-  await createPeerConnection(fromUserId);
+  // Attempt to create the peer connection
+  const result = await createPeerConnection(fromUserId);
 
-  await peerConnection.setRemoteDescription(offer);
-  const answer = await peerConnection.createAnswer();
-  await peerConnection.setLocalDescription(answer);
+  // Check if the result is truthy (i.e., peer connection was created successfully)
+  if (result) {
+    // Set the remote description using the received offer
+    await peerConnection.setRemoteDescription(offer);
 
-  return answer;
+    // Create an answer for the received offer
+    const answer = await peerConnection.createAnswer();
+
+    // Set the local description with the generated answer
+    await peerConnection.setLocalDescription(answer);
+
+    // Return the generated answer
+    return answer;
+  } else {
+    // If peer connection was not created successfully, log and return null
+    console.error("Failed to create peer connection.");
+    return null;
+  }
 };
 
 socket.on("receive_candidate", async (data) => {
   const { fromUserId, candidate } = data;
   console.log(`Received ICE candidate from user: ${fromUserId}`);
+
+  // Initialize the remoteIceCandidates array if it's not already present in sessionStorage
+  let remoteIceCandidates =
+    JSON.parse(sessionStorage.getItem("remoteIceCandidates")) || [];
+
+  // Push the new candidate into the array
+  remoteIceCandidates.push(candidate);
+
+  // Save the updated remote ICE candidates array to sessionStorage
+  sessionStorage.setItem(
+    "remoteIceCandidates",
+    JSON.stringify(remoteIceCandidates)
+  );
+
+  // Convert the candidate to RTCIceCandidate format
   const iceCandidate = new RTCIceCandidate(candidate);
-  await peerConnection.addIceCandidate(iceCandidate);
+
+  // Add the ICE candidate to the peer connection
+  try {
+    await peerConnection.addIceCandidate(iceCandidate);
+    console.log("ICE candidate added successfully.");
+  } catch (error) {
+    console.error("Error adding ICE candidate: ", error);
+  }
 });
 
+const Calling = async (user) => {
+  console.log("calling...");
+  const result = await createOffer(user._id);
+
+  if (result) {
+    hidebasicUI();
+    showCallingUI(user);
+    return true;
+  } else {
+    return false;
+  }
+  // Play calling audio
+};
+
+async function OnclickCalling(friendId) {
+  console.log(`Calling friend with ID: ${friendId}`);
+
+  // Find the friend object from the list of friends
+  const friend = friends.find((friend) => friend._id == friendId);
+  console.log("Finding friend:", friend);
+
+  if (!friend) {
+    console.error("Friend not found!");
+    alert("Friend not found.");
+    return;
+  }
+
+  try {
+    // Call the Calling function and await its result
+    const result = await Calling(friend);
+
+    // If the result is successful (if it's a boolean or a status check)
+    if (result) {
+      console.log("Call initiated successfully.");
+      recieverId = friend._id;
+      console.log(recieverId);
+    } else {
+      console.log("Failed to initiate call.");
+      // Handle failure case here, show an alert or notification if needed
+      //   alert("Failed to start the call. Please try again.");
+    }
+  } catch (error) {
+    // If there was an error during calling, handle it here
+    console.error("Error during call:", error);
+    alert("An error occurred while making the call.");
+  }
+
+  // Handle the cancel button click event for call cancellation
+}
+
+const handlecancel_call = (friendId) => {
+  console.log("Cancelling the call with:", friendId);
+  isRinging = null;
+  // Notify the server about call cancellation
+  socket.emit("cancel_call", { toUserId: friendId });
+
+  // Stop media tracks and hide the calling UI
+  stopMediaTracks();
+
+  // Hide the calling UI and show the basic UI
+  hideCallingUI();
+  showbasicUI();
+  clearSpecificSessionData();
+
+  // Show notification that the call was cancelled
+  //   alert("Call cancelled.");
+};
 // Join Room
 const joinRoom = async () => {
   localTracks = await navigator.mediaDevices.getUserMedia({
@@ -1208,16 +1348,6 @@ document
     e.target.reset();
   });
 
-let callingAudio = null;
-
-const Calling = async (user) => {
-  console.log("calling...");
-  await createOffer(user._id);
-  // Play calling audio
-  hidebasicUI();
-  showCallingUI(user);
-};
-
 const IncomingCallUI = async (user_id, offer) => {
   // Show the incoming call UI
 
@@ -1228,24 +1358,35 @@ const IncomingCallUI = async (user_id, offer) => {
 
   // Send acknowledgment to the caller that the offer is received
   socket.emit("offer_received_ack", { fromUserId: user_id });
-
+  isCalling = user_id;
   // Handle Accept Call
   document.getElementById("accept-call-btn").onclick = async () => {
-    const acceptCallBtn = document.getElementById("accept-call-btn");
-    acceptCallBtn.disabled = true;
-
     const answer = await createAnswer(user_id, offer);
-    socket.emit("send_answer", { toUserId: user_id, answer });
+
+    if (answer == null) {
+      rejectCall(user_id);
+      hideIncomingCallUI();
+    } else {
+      const acceptCallBtn = document.getElementById("accept-call-btn");
+
+      const rejectCallBtn = document.getElementById("reject-call-btn");
+      acceptCallBtn.disabled = true;
+
+      rejectCallBtn.disabled = true;
+      socket.emit("send_answer", { toUserId: user_id, answer });
+    }
   };
 
   // Handle Reject Call
   document.getElementById("reject-call-btn").onclick = () => {
     console.log("call_rejected...");
-    socket.emit("call_rejected", { toUserId: user_id });
+
+    rejectCall(user_id);
     hideIncomingCallUI();
   };
 
-  if (incommingAudio) {
+  if (!incommingAudio) {
+    incommingAudio = new Audio("/audio/incoming.mp3");
     incommingAudio.loop = true; // Loop the audio while the call is ringing
     incommingAudio
       .play()
@@ -1259,7 +1400,7 @@ function hideIncomingCallUI() {
   if (incommingAudio) {
     incommingAudio.pause();
     incommingAudio.currentTime = 0; // Reset to the beginning
-    // incommingAudio = null; // Cleanup
+    incommingAudio = null; // Cleanup
   }
 }
 
@@ -1530,9 +1671,11 @@ async function createMicrophoneAndCameraTracks(
 
 const stopMediaTracks = () => {
   // Stop the local audio and video tracks
-  localStream.getTracks().forEach((track) => {
-    track.stop(); // Stop the track and release the resource
-  });
+  if (localStream) {
+    localStream.getTracks().forEach((track) => {
+      track.stop(); // Stop the track and release the resource
+    });
+  }
 
   // Optionally, set the video element's srcObject to null
   document.getElementById("user-1").srcObject = null;
@@ -1541,6 +1684,32 @@ const stopMediaTracks = () => {
 leaveStream = () => {
   showbasicUI();
 };
+
+// Logout function on the client side
+function logout() {
+  // Make the logout request to the backend
+  fetch("/auth/logout", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${localStorage.getItem("token")}`, // Optionally add the token if needed
+    },
+  })
+    .then((response) => response.json())
+    .then((data) => {
+      if (data.message === "Logged out successfully") {
+        // Optionally, handle UI updates, like redirecting to the login page
+        localStorage.removeItem("token"); // Remove the JWT token from localStorage
+        window.location.href = "/login"; // Redirect to the login page
+      }
+    })
+    .catch((error) => {
+      console.error("Logout failed:", error);
+    });
+}
+
+// Example logout button
+document.getElementById("logoutButton").addEventListener("click", logout);
 
 document.getElementById("camera-btn").addEventListener("click", toggleCamera);
 
@@ -1551,3 +1720,149 @@ document.getElementById("screen-btn").addEventListener("click", toggleScreen);
 document.getElementById("join-btn").addEventListener("click", joinStream);
 
 document.getElementById("leave-btn").addEventListener("click", leaveStream);
+
+document.getElementById("cancel-call-button").addEventListener("click", () => {
+  // cons
+  handlecancel_call(recieverId); // Pass the friendId dynamically
+  recieverId = null;
+});
+
+function saveSessionData(key, value) {
+  sessionStorage.setItem(key, JSON.stringify(value));
+}
+
+function loadSessionData(key) {
+  return JSON.parse(sessionStorage.getItem(key));
+}
+
+window.addEventListener("beforeunload", async () => {
+  // Check if either the call is ringing or calling
+  if (isRinging || isCalling) {
+    // Retrieve the token from localStorage or cookies
+    const token =
+      localStorage.getItem("token") || document.cookie.split("token=")[1];
+
+    // Ensure token is available
+    if (!token) {
+      console.error("No token found");
+      return;
+    }
+
+    // Determine the action (cancel or reject) and the appropriate user ID
+    const actionType = isRinging ? "cancel" : "reject";
+    const toUserId = isRinging || isCalling;
+    // Use correct user ID
+
+    // Prepare the payload as URL-encoded data
+    const payload = new URLSearchParams();
+    payload.append("type", actionType);
+    payload.append("toUserId", toUserId);
+    payload.append("token", token);
+
+    // Send the data using sendBeacon
+    const success = navigator.sendBeacon("/notify-call-end", payload);
+
+    if (success) {
+      console.log("Beacon request successfully sent.");
+    } else {
+      console.error("Failed to send beacon request.");
+    }
+  }
+});
+
+window.onload = async () => {
+  const savedOffer = loadSessionData("offer");
+  const savedAnswer = loadSessionData("answer");
+  const savedLocalCandidates = loadSessionData("localIceCandidates");
+  const savedRemoteCandidates = loadSessionData("remoteIceCandidates");
+  const iscaller = loadSessionData("caller");
+  const busy = loadSessionData("busy");
+
+  if (!busy) {
+    console.log("not busy ");
+    return;
+  }
+
+  if (savedOffer && savedAnswer) {
+    console.log("Reconnecting using saved offer and answer...");
+
+    // Create peer connection only if it does not exist already
+    if (!peerConnection) {
+      console.log("peernot exist ");
+      peerConnection = new RTCPeerConnection(servers);
+      peerConnection.ontrack = handleRemoteStream;
+      peerConnection.onicecandidate = (event) => {
+        handleIceCandidate(event, toUserId); // Pass the event and toUserId
+      };
+    } else {
+      console.log("peer exist ");
+    }
+
+    try {
+      if (iscaller) {
+        // If caller, set local offer and remote answer
+        await peerConnection.setLocalDescription(savedOffer);
+        await peerConnection.setRemoteDescription(savedAnswer);
+      } else {
+        // If receiver, set local answer and remote offer
+        await peerConnection.setLocalDescription(savedAnswer);
+        await peerConnection.setRemoteDescription(savedOffer);
+      }
+    } catch (error) {
+      console.error("Error setting descriptions:", error);
+    }
+  }
+
+  // Add saved ICE candidates for local and remote peers
+  if (savedLocalCandidates) {
+    for (const candidate of savedLocalCandidates) {
+      try {
+        await peerConnection.addIceCandidate(candidate);
+      } catch (error) {
+        console.error("Error adding local ICE candidate:", error);
+      }
+    }
+  }
+
+  if (savedRemoteCandidates) {
+    for (const candidate of savedRemoteCandidates) {
+      try {
+        await peerConnection.addIceCandidate(candidate);
+      } catch (error) {
+        console.error("Error adding remote ICE candidate:", error);
+      }
+    }
+  }
+};
+
+const handleRemoteStream = (event) => {
+  const remoteStream = new MediaStream();
+  remoteStream.addTrack(event.track);
+  document.getElementById("user-2").srcObject = remoteStream;
+};
+
+const handleIceCandidate = (event, toUserId) => {
+  if (event.candidate) {
+    // Load existing ICE candidates (either local or remote) from session storage
+    const iceCandidates = loadSessionData("localIceCandidates") || [];
+
+    // Add the new ICE candidate to the list
+    iceCandidates.push(event.candidate);
+
+    // Save the updated ICE candidates back to session storage
+    saveSessionData("localIceCandidates", iceCandidates);
+
+    // Emit the ICE candidate to the other peer via socket
+    socket.emit("send_candidate", { toUserId, candidate: event.candidate });
+  }
+};
+
+function clearSpecificSessionData() {
+  sessionStorage.removeItem("offer");
+  sessionStorage.removeItem("answer");
+  sessionStorage.removeItem("localIceCandidates");
+  sessionStorage.removeItem("remoteIceCandidates");
+  sessionStorage.removeItem("caller");
+  sessionStorage.removeItem("friendId");
+  console.log("Specific session data cleared.");
+}

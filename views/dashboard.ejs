@@ -328,6 +328,63 @@
   background: #0056b3;
 }
 
+/* settign */
+.setting-dropdown {
+  float: right;
+  margin-right: 115px;
+  overflow: hidden;
+}
+
+.setting-dropdown .setting-dropbtn {
+  font-size: 16px;
+  border: none;
+  outline: none;
+  color: white;
+  padding: 14px 16px;
+  background-color: #ff0000;
+  font-family: inherit;
+  margin: 0;
+}
+
+.setting-dropbtn:hover {
+  cursor: pointer;
+}
+
+.setting-dropdown:hover {
+  background-color: #ff7b7b;
+  text-decoration: none;
+}
+
+.setting-dropdown-content {
+  display: none;
+  position: absolute;
+  background-color: #ff0000 !important;
+  min-width: 160px;
+  box-shadow: 0px 8px 16px 0px rgba(0, 0, 0, 0.2);
+  z-index: 1;
+  opacity: 0;
+  -webkit-transition: opacity .3s ease-in;
+  -moz-transition: opacity .3s ease-in;
+  -o-transition: opacity .3s ease-in;
+  transition: opacity .3 ease-in;
+}
+
+.setting-dropdown-content a {
+  float: none;
+  color: black;
+  padding: 14px 16px;
+  text-decoration: none;
+  display: block;
+}
+
+.setting-dropdown-content a:hover {
+  background-color: #ff7b7b;
+}
+
+.setting-show {
+  display: block;
+  z-index: 11;
+}
 </style>
 <body>
 <div id="basic-ui">
@@ -388,7 +445,14 @@
         <a class="nav__link" href="/search-friends" id="search__friends__link">Search Friends</a>
         <a class="nav__link" href="/friend-requests" id="friend__requests__link">Friend Requests</a>
         <a class="nav__link" href="/blocked-users" id="blocked__users__link">Blocked Users</a>
-        <a class="nav__link" href="/settings" id="settings__link">Settings</a>
+        <a class="nav__link" href="/settings" id="settings__link" onclick="myFunction()">Settings</a>
+        <div class="setting-dropdown">
+          <div class="setting-dropdown-content" id="setting-myDropdown">
+            <a href="signup.php" id="logoutButton" style="color: white;">Logout</a>
+            <a href="#" style="color: white;">Info</a>
+            <a href="#" style="color: white;">Last news</a>
+          </div>
+        </div>
     </div>
       
     </header>
@@ -539,6 +603,6 @@
 
  <!-- <script type="text/javascript" src="/main1.js"></script>  -->
 <script type="text/javascript" src="/dashboard.js"></script>
-
+<script type="text/javascript" src="/basic.js"></script>
 
 </html>

@@ -2,9 +2,7 @@ const jwt = require("jsonwebtoken");
 
 // The middleware function that verifies the token
 const verifySocket = async (socket, next) => {
-  const token = socket.handshake.auth.token; // Get the token from the handshake
-
-  console.log("Received token:", token); // Optionally log the token for debugging
+  const token = socket.handshake.auth.token;
 
   if (!token) {
     return next(new Error("Authentication error: Token required"));
@@ -24,8 +22,6 @@ const verifySocket = async (socket, next) => {
 
     // Attach the decoded user information to the socket object
     socket.user = decoded;
-    console.log("decoded", decoded);
-    // Proceed with the connection
     next();
   } catch (err) {
     console.error("Authentication error:", err); // Log the error for debugging
