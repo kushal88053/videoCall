@@ -85,12 +85,15 @@ exports.login = async (req, res) => {
     });
 
     console.log(token);
+    console.log(process.env);
     // Option 1: Send token as a cookie (HttpOnly, Secure flags recommended for production)
     res.cookie("token", token, {
       httpOnly: true, // Prevents client-side access to the cookie
       secure: process.env.NODE_ENV === "production", // Only use secure in production
       maxAge: 3600000, // 1 hour in milliseconds
     });
+
+    console.log(process.env.NODE_ENV === "production");
 
     // Option 2: Send token as a Bearer token in response (or you can choose to do both)
     res.status(200).json({

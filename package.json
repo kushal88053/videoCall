@@ -1,17 +1,16 @@
 {
-  "name": "agora_web_quickstart",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "videocall",
+  "version": "1.1.0",
+  "description": "video call using the theird party api",
+  "main": "app.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "build": "webpack --config webpack.config.js",
-    "start:dev": "node index.js"
+    "start:dev": "node app.js",
+    "start": "node app.js"
   },
   "dependencies": {
     "@socket.io/redis-adapter": "^8.3.0",
-    "agora-rtc-sdk-ng": "latest",
-    "agora-rtm-sdk": "^2.2.0",
     "agora-token": "^2.0.3",
     "axios": "^1.7.7",
     "bcryptjs": "^2.4.3",
@@ -21,6 +20,7 @@
     "ejs": "^3.1.10",
     "express": "^4.21.1",
     "jsonwebtoken": "^9.0.2",
+    "mongoose": "^8.8.3",
     "nodemailer": "^6.9.15",
     "redis": "^4.7.0",
     "socket.io": "^4.8.1",
