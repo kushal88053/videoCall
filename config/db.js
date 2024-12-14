@@ -6,12 +6,9 @@ const connectDB = async () => {
 
   while (attempts < maxRetries) {
     try {
-      await mongoose.connect(process.env.MONGO_URI, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true,
-      });
+      await mongoose.connect(process.env.MONGO_URI);
       console.log("MongoDB connected");
-      break; // Exit the loop if connection is successful
+      return;
     } catch (error) {
       attempts++;
       console.error(
@@ -20,14 +17,13 @@ const connectDB = async () => {
       );
 
       if (attempts >= maxRetries) {
-        console.error("All connection attempts failed. Exiting...");
-        process.exit(1); // Exit the app if all retries fail
+        console.error("All connection attempts failed.");
+        throw new Error("MongoDB connection failed after max retries.");
       }
 
-      // Wait before retrying (e.g., 2 seconds)
-      await new Promise((resolve) => setTimeout(resolve, 2000));
+      await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait before retrying
     }
   }
 };
 
-module.exports = connectDB;
+module.exports = { connectDB };

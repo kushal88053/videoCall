@@ -13,7 +13,11 @@ const {
   rejectFriendRequest,
   unblockingFriend,
   blockingFriend,
+  updateUserImage,
+  updateUserEmail,
 } = require("../controllers/dashboardController");
+
+const uploadToS3 = require("../middlewares/uploadMiddleware"); // Import the middleware
 
 const {
   getUserNotifications,
@@ -51,5 +55,12 @@ router.post("/rejectFriendRequest", rejectFriendRequest);
 router.post("/blockingFriend", blockingFriend);
 
 router.post("/unblockingFriend", unblockingFriend);
+
+// router.post("/logout", logout);
+// router.post("/upload-image", uploadToS3, updateUserImage);
+
+// router.post("/update-email", updateUserEmail);
+
+// router.post("/update-userdata", updateUserdata);
 
 module.exports = router;

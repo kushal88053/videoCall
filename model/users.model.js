@@ -32,6 +32,9 @@ const userSchema = new mongoose.Schema(
     verificationToken: {
       type: String,
     },
+    tokenExpiry: {
+      type: Date,
+    },
     friends: [
       {
         type: mongoose.Schema.Types.ObjectId,
